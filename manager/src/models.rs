@@ -1,6 +1,7 @@
-use crate::process::{Process, Workflow};
+use crate::process::{Process, Workflow}; // Adjust this import according to your actual module structure
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use ron::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Status {
@@ -20,7 +21,7 @@ pub struct ToManager {
     pub status: Status,
     /// ToManager input schema version
     pub schema: String,
-    pub data: String, // BUG treat it as any type
+    pub data: Value,
 }
 
 impl Display for ToManager {
@@ -47,7 +48,7 @@ pub struct FromManager {
     pub process: Process,
     /// FromManager output schema version
     pub schema: String,
-    pub data: String, // BUG treat it as any type
+    pub data: Value,
 }
 
 impl Display for FromManager {
@@ -82,5 +83,50 @@ impl Display for ToManagerEdits {
             "ToManagerEdits {{ name: {} ({}), workflow: ... }}",
             self.name, self.version
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ron::de::from_str;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_deserialize_to_manager_edits() {
+        let ron_string = r#"(
+            name: "ExampleEdit",
+            version: "v0.1.0",
+            schema: "v0.1.0",
+            workflow: {
+                Process(service:"license",function:"add"):[
+                    Process(service:"legal",function:"update")
+                ],
+                Process(service:"legal",function:"update"):[
+                    Process(service:"license",function:"add")
+                ]
+            },
+        )"#;
+
+        let deserialized: ToManagerEdits = from_str(ron_string).expect("Deserialization failed");
+
+        assert_eq!(deserialized.name, "ExampleEdit");
+        assert_eq!(deserialized.version, "v0.1.0");
+        assert_eq!(deserialized.schema, "v0.1.0");
+
+        let process1 = Process {
+            service: "license".to_string(),
+            function: "add".to_string(),
+        };
+        let process2 = Process {
+            service: "legal".to_string(),
+            function: "update".to_string(),
+        };
+        let expected_workflow = HashMap::from([
+            (process1.clone(), vec![process2.clone()]),
+            (process2.clone(), vec![process1.clone()]),
+        ]);
+
+        assert_eq!(deserialized.workflow, expected_workflow);
     }
 }
