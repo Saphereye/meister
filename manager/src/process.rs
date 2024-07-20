@@ -23,7 +23,6 @@ impl WorkflowTriple {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Process {
     pub service: Service,
