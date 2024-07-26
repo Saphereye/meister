@@ -1,6 +1,7 @@
 use kafka::consumer::Consumer;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 pub mod models;
 use models::*;
@@ -10,9 +11,15 @@ use process::*;
 
 use log::*;
 
+#[derive(Deserialize)]
+pub struct ManagerConfiguration {
+    pub hosts: Vec<String>,
+    pub rollback_functions: HashMap<Process, Process>,
+}
+
 pub fn normal_consumer_runner(
     mut normal_consumer: Consumer,
-    workflows: Arc<Mutex<Workflows>>,
+    workflows: Arc<RwLock<Workflows>>,
     rollback_functions: HashMap<Process, Process>,
 ) {
     loop {
@@ -34,8 +41,9 @@ pub fn normal_consumer_runner(
                             message.process.function.clone(),
                         );
                         let next_processes = {
-                            let workflows_guard = workflows.lock().unwrap();
-                            workflows_guard
+                            workflows
+                                .read()
+                                .unwrap()
                                 .get(&message.name)
                                 .unwrap() // BUG: unwrap
                                 .workflow
@@ -62,7 +70,7 @@ pub fn normal_consumer_runner(
                     }
                     Status::Failed => {
                         let anti_workflow = workflows
-                            .lock()
+                            .read()
                             .unwrap()
                             .get(&message.name)
                             .unwrap()
@@ -94,7 +102,7 @@ pub fn normal_consumer_runner(
     }
 }
 
-pub fn edits_consumer_runner(mut edits_consumer: Consumer, workflows: Arc<Mutex<Workflows>>) {
+pub fn edits_consumer_runner(mut edits_consumer: Consumer, workflows: Arc<RwLock<Workflows>>) {
     loop {
         for ms in edits_consumer.poll().unwrap().iter() {
             for m in ms.messages() {
@@ -108,8 +116,7 @@ pub fn edits_consumer_runner(mut edits_consumer: Consumer, workflows: Arc<Mutex<
                 info!("Received edit: {:?}", message);
 
                 let anti_workflow = create_anti_workflow(&message.workflow);
-                let mut workflows = workflows.lock().unwrap();
-                workflows.insert(
+                workflows.write().unwrap().insert(
                     message.name.clone(),
                     WorkflowTriple::new(
                         message.workflow.clone(),
@@ -125,7 +132,7 @@ pub fn edits_consumer_runner(mut edits_consumer: Consumer, workflows: Arc<Mutex<
     }
 }
 
-pub fn create_anti_workflow(original: &Workflow) -> Workflow {
+fn create_anti_workflow(original: &Workflow) -> Workflow {
     let mut reversed_connections = HashMap::new();
 
     for (src, targets) in original.iter() {

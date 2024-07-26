@@ -1,74 +1,44 @@
 use kafka::consumer::*;
 
-use manager::process::*;
-use manager::{create_anti_workflow, edits_consumer_runner, normal_consumer_runner};
+use manager::{edits_consumer_runner, normal_consumer_runner};
+use manager::{process::*, ManagerConfiguration};
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::thread;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // BUG: Should probably use never type here
     env_logger::init();
 
-    // Sample rollback functions
-    let rollback_functions = HashMap::from([
-        (
-            Process::new("user".to_owned(), "create".to_owned()),
-            Process::new("user".to_owned(), "delete".to_owned()),
-        ),
-        (
-            Process::new("license".to_owned(), "add".to_owned()),
-            Process::new("license".to_owned(), "remove".to_owned()),
-        ),
-        (
-            Process::new("membership".to_owned(), "add".to_owned()),
-            Process::new("membership".to_owned(), "remove".to_owned()),
-        ),
-        (
-            Process::new("legal".to_owned(), "update".to_owned()),
-            Process::new("legal".to_owned(), "revert".to_owned()),
-        ),
-    ]);
+    ctrlc::set_handler(move || {
+        println!("Bye Bye 🤫🧏");
+        std::process::exit(0); // BUG: Will this leave orphan threads?
+    })
+    .expect("Error setting Ctrl-C handler");
 
-    let user_registration: Workflow = HashMap::from([
-        (
-            Process::new("user".to_owned(), "create".to_owned()),
-            vec![
-                Process::new("license".to_owned(), "add".to_owned()),
-                Process::new("membership".to_owned(), "add".to_owned()),
-            ],
-        ),
-        (
-            Process::new("license".to_owned(), "add".to_owned()),
-            vec![Process::new("legal".to_owned(), "update".to_owned())],
-        ),
-    ]);
+    let config: ManagerConfiguration = ron::de::from_str(include_str!("../config.ron"))?;
 
-    let anti_user_registration = create_anti_workflow(&user_registration);
+    // TODO: extend to many rollback process for one process
+    let rollback_functions = config.rollback_functions;
 
-    let workflows: Arc<Mutex<Workflows>> = Arc::new(Mutex::new(HashMap::from([(
-        "user_registration".to_owned(),
-        WorkflowTriple::new(
-            user_registration.clone(),
-            anti_user_registration,
-            "v0.1.0".to_owned(),
-        ),
-    )])));
+    let workflows: Arc<RwLock<Workflows>> = Arc::new(RwLock::new(HashMap::new()));
 
-    let normal_consumer = Consumer::from_hosts(vec!["localhost:9092".to_owned()])
+    // TODO: put all repeated stuff in a config file
+    let normal_consumer = Consumer::from_hosts(config.hosts.clone())
         .with_topic("tomanager".to_owned())
         .with_group("manager".to_owned())
         .with_offset_storage(Some(GroupOffsetStorage::Kafka))
         .create()?;
 
-    let edits_consumer = Consumer::from_hosts(vec!["localhost:9092".to_owned()])
+    let edits_consumer = Consumer::from_hosts(config.hosts)
         .with_topic("tomanageredits".to_owned())
         .with_group("".to_owned()) // Group less
         .with_offset_storage(Some(GroupOffsetStorage::Kafka))
         .create()?;
 
     let workflows_clone = workflows.clone();
+
     // Normal Consumer
     thread::spawn(move || normal_consumer_runner(normal_consumer, workflows, rollback_functions));
 
