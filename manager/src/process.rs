@@ -4,7 +4,9 @@ use std::{collections::HashMap, fmt::Display};
 pub type Service = String;
 pub type Function = String;
 pub type Workflow = HashMap<Process, Vec<Process>>;
-pub type Workflows = HashMap<String, WorkflowTriple>;
+pub type WorkflowName = String;
+pub type Version = String;
+pub type Workflows = HashMap<String, HashMap<Version, WorkflowTriple>>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkflowTriple {

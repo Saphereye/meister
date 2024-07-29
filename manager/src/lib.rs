@@ -1,6 +1,8 @@
 use kafka::consumer::Consumer;
-use serde::{Deserialize, Serialize};
+use kafka::producer::{Producer, Record};
+use serde::Deserialize;
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Write;
 use std::sync::{Arc, RwLock};
 
 pub mod models;
@@ -17,11 +19,20 @@ pub struct ManagerConfiguration {
     pub rollback_functions: HashMap<Process, Process>,
 }
 
+fn send_from_manager(message: &FromManager, producer: &mut Producer) {
+    let mut buf = String::new();
+    write!(&mut buf, "{}", ron::ser::to_string(&message).unwrap()).unwrap();
+    producer
+        .send(&Record::from_value("frommanager", buf.as_bytes()))
+        .unwrap();
+}
+
 pub fn normal_consumer_runner(
     mut normal_consumer: Consumer,
+    mut producer: Producer, // TODO use this
     workflows: Arc<RwLock<Workflows>>,
     rollback_functions: HashMap<Process, Process>,
-) {
+) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         for ms in normal_consumer.poll().unwrap().iter() {
             for m in ms.messages() {
@@ -32,6 +43,35 @@ pub fn normal_consumer_runner(
                         continue;
                     }
                 };
+
+                let message_version = if let Some(version) = message.version.clone() {
+                    version
+                } else {
+                    warn!("Version is not set, using latest version");
+                    let version = {
+                        let workflows_read = match workflows.read() {
+                            Ok(workflows) => workflows,
+                            Err(poisoned) => {
+                                error!("Workflows lock is poisoned");
+                                poisoned.into_inner()
+                            }
+                        };
+                        let workflow_versions = workflows_read.get(&message.name);
+                        if let Some(versions) = workflow_versions {
+                            versions.keys().max().cloned()
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(version) = version {
+                        version
+                    } else {
+                        error!("No versions found for workflow: {}", message.name);
+                        continue;
+                    }
+                };
+
                 info!("Received message: {}", message);
 
                 match message.status {
@@ -41,41 +81,81 @@ pub fn normal_consumer_runner(
                             message.process.function.clone(),
                         );
                         let next_processes = {
-                            workflows
-                                .read()
-                                .unwrap()
-                                .get(&message.name)
-                                .unwrap() // BUG: unwrap
-                                .workflow
-                                .get(&current_process)
-                                .unwrap() // BUG: unwrap
-                                .clone()
+                            let workflows_read = match workflows.read() {
+                                Ok(workflows) => workflows,
+                                Err(poisoned) => {
+                                    error!("Workflows lock is poisoned");
+                                    poisoned.into_inner()
+                                }
+                            };
+
+                            if let Some(workflow_versions) = workflows_read.get(&message.name) {
+                                if let Some(triple) = workflow_versions.get(&message_version) {
+                                    if let Some(processes) = triple.workflow.get(&current_process) {
+                                        processes.clone()
+                                    } else {
+                                        error!(
+                                            "No next processes found for current process: {}",
+                                            current_process
+                                        );
+                                        continue;
+                                    }
+                                } else {
+                                    error!("No workflow found for version: {}", message_version);
+                                    continue;
+                                }
+                            } else {
+                                error!(
+                                    "No workflow versions found for message name: {}",
+                                    message.name
+                                );
+                                continue;
+                            }
                         };
 
                         for process in next_processes {
                             let next_message = FromManager {
                                 uuid: message.uuid.clone(),
                                 name: message.name.clone(),
-                                version: message.version.clone(),
+                                version: message.version.clone().unwrap(),
                                 process: process.clone(),
                                 schema: message.schema.clone(),
                                 data: message.data.clone(),
                             };
-
+                            send_from_manager(&next_message, &mut producer);
                             trace!("Sending message: {}", next_message);
                         }
                     }
                     Status::InProgress => {
                         info!("{} is in progress", message);
+
+                        // TODO: Implement timeout
                     }
                     Status::Failed => {
-                        let anti_workflow = workflows
-                            .read()
-                            .unwrap()
-                            .get(&message.name)
-                            .unwrap()
-                            .anti_workflow
-                            .clone();
+                        let anti_workflow = {
+                            let workflows_read = match workflows.read() {
+                                Ok(workflows) => workflows,
+                                Err(poisoned) => {
+                                    error!("Workflows lock is poisoned");
+                                    poisoned.into_inner()
+                                }
+                            };
+
+                            if let Some(workflow_versions) = workflows_read.get(&message.name) {
+                                if let Some(triple) = workflow_versions.get(&message_version) {
+                                    triple.anti_workflow.clone()
+                                } else {
+                                    error!("No workflow found for version: {}", message_version);
+                                    continue;
+                                }
+                            } else {
+                                error!(
+                                    "No workflow versions found for message name: {}",
+                                    message.name
+                                );
+                                continue;
+                            }
+                        };
 
                         let mut remaining_processes = VecDeque::from(vec![message.process.clone()]);
 
@@ -88,13 +168,22 @@ pub fn normal_consumer_runner(
                                 remaining_processes.push_back(workflow.clone());
 
                                 let rollback_process = rollback_functions.get(workflow).unwrap();
+
+                                let next_message = FromManager {
+                                    uuid: message.uuid.clone(),
+                                    name: message.name.clone(),
+                                    version: message.version.clone().unwrap(),
+                                    process: rollback_process.clone(),
+                                    schema: message.schema.clone(),
+                                    data: message.data.clone(),
+                                };
+
+                                send_from_manager(&next_message, &mut producer);
                                 trace!("Calling rollback: {}", rollback_process);
                             }
                         }
                     }
                 }
-
-                info!("Message over: {}", message);
             }
             let _ = normal_consumer.consume_messageset(ms);
         }
@@ -113,17 +202,25 @@ pub fn edits_consumer_runner(mut edits_consumer: Consumer, workflows: Arc<RwLock
                         continue;
                     }
                 };
-                info!("Received edit: {:?}", message);
+                info!("Received edit: {}", message);
 
                 let anti_workflow = create_anti_workflow(&message.workflow);
-                workflows.write().unwrap().insert(
-                    message.name.clone(),
-                    WorkflowTriple::new(
-                        message.workflow.clone(),
-                        anti_workflow,
-                        message.version.clone(), // Store version with workflow
-                    ),
-                );
+                // if message.name field is present in the hashmap, update the hashmap
+                // else insert the message.name field in the hashmap
+
+                workflows
+                    .write()
+                    .unwrap()
+                    .entry(message.name.clone())
+                    .or_default()
+                    .entry(message.version.clone())
+                    .or_insert_with(|| {
+                        WorkflowTriple::new(
+                            message.workflow.clone(),
+                            anti_workflow,
+                            message.version.clone(), // Store version with workflow
+                        )
+                    });
 
                 info!("Workflows updated: {:?}", workflows);
             }

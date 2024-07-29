@@ -16,7 +16,7 @@ pub struct ToManager {
     /// Name of target workflow
     pub name: String,
     /// Version of target workflow
-    pub version: String,
+    pub version: Option<String>,
     pub process: Process,
     pub status: Status,
     /// ToManager input schema version
@@ -31,7 +31,7 @@ impl Display for ToManager {
             "ToManager {{ uuid: {}..., name: {} ({}), Process: {}, status: {:?}, data: ... }}",
             self.uuid[..8].to_owned(),
             self.name,
-            self.version,
+            self.version.clone().unwrap_or("latest".to_string()),
             self.process,
             self.status
         )

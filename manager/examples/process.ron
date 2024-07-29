@@ -24,7 +24,7 @@ ToManager(
     data: "adarsh"
 )
 
-ToManager(uuid: "585f6cf4-bf0e-4852-8ca3-c6866ce8a752",name: "user_registration",version: "v0.1.0",process: Process(service: "legal",function: "update"),status: Failed,schema: "v0.1.0",data: "adarsh")
-ToManager(uuid: "5888a209-176f-4a8c-9555-52c8da98d850",name: "user_registration",version: "v0.1.0",process: Process(service: "user",function: "create"),status: Success,schema: "v0.1.0",data: "adarsh")
+ToManager(uuid: "585f6cf4-bf0e-4852-8ca3-c6866ce8a752",name: "user_registration",version: Some("v0.1.0"),process: Process(service: "legal",function: "update"),status: Failed,schema: "v0.1.0",data: "adarsh")
+ToManager(uuid: "5888a209-176f-4a8c-9555-52c8da98d850",name: "user_registration",version: Some("v0.1.0"),process: Process(service: "user",function: "create"),status: Success,schema: "v0.1.0",data: "adarsh")
 
-(uuid: "585f6cf4-bf0e-4852-8ca3-c6866ce8a752", name: "user_registration", version: "v0.1.0", process: (service:"legal", function:"update"), status: Failed, schema: "v0.1.0", data: "adarsh")
+(uuid: "585f6cf4-bf0e-4852-8ca3-c6866ce8a752", name: "user_registration", version: None, process: (service:"legal", function:"update"), status: Failed, schema: "v0.1.0", data: "adarsh")
