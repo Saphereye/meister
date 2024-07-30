@@ -3,16 +3,16 @@ ToManagerEdits(
     version: "v0.1.0",
     schema: "v0.1.0",
     workflow: {
-        Process(service:"license",function:"add"):[
+        Process(service:"license",function:"create"):[
             Process(service:"legal",function:"update")
         ],
         Process(service:"user",function:"create"):[
-            Process(service:"license",function:"add"),
-            Process(service:"membership",function:"add")
+            Process(service:"license",function:"create"),
+            Process(service:"membership",function:"create")
         ]
     }
 )
 
-ToManagerEdits(name:"user_registration",version:"v0.1.0",schema:"v0.1.0",workflow:{Process(service:"license",function:"add"):[Process(service:"legal",function:"update")],Process(service:"user",function:"create"):[Process(service:"license",function:"add"),Process(service:"membership",function:"add")]})
+ToManagerEdits(name:"user_registration",version:"v0.1.0",schema:"v0.1.0",workflow:{Process(service:"license",function:"create"):[Process(service:"legal",function:"update")],Process(service:"user",function:"create"):[Process(service:"license",function:"create"),Process(service:"membership",function:"create")]})
 
-(name:"user_registration", version:"v0.1.0", schema:"v0.1.0", workflow:{(service:"license", function:"add"):[(service:"legal", function:"update")], (service:"user", function:"create"):[(service:"license", function:"add"), (service:"membership", function:"add")]})
+(name:"user_registration", version:"v0.1.0", schema:"v0.1.0", workflow:{(service:"license", function:"create"):[(service:"legal", function:"update")], (service:"user", function:"create"):[(service:"license", function:"create"), (service:"membership", function:"create")]})

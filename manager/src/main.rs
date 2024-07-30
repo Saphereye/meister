@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let edits_consumer = Consumer::from_hosts(config.hosts.clone())
         .with_topic("tomanageredits".to_owned())
-        .with_group("".to_owned()) // Group less
+        .with_group("".to_owned()) // Group-less
         .with_offset_storage(Some(GroupOffsetStorage::Kafka))
         .create()?;
 

@@ -1,9 +1,9 @@
 ManagerConfiguration(
     hosts: ["localhost:9092"],
     rollback_functions: {
-        Process(service:"legal",function:"update")  : Process(service:"legal",function:"revert"),
+        Process(service:"legal",function:"update")  : Process(service:"legal",function:"delete"),
         Process(service:"user",function:"create")   : Process(service:"user",function:"delete"),
-        Process(service:"membership",function:"add"): Process(service:"membership",function:"remove"),
-        Process(service:"license",function:"add")   : Process(service:"license",function:"remove")
+        Process(service:"membership",function:"create"): Process(service:"membership",function:"delete"),
+        Process(service:"license",function:"create")   : Process(service:"license",function:"delete")
     }
 )

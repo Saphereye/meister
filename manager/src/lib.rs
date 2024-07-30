@@ -166,7 +166,6 @@ pub fn normal_consumer_runner(
                                 .unwrap_or(&Vec::<Process>::new())
                             {
                                 remaining_processes.push_back(workflow.clone());
-
                                 let rollback_process = rollback_functions.get(workflow).unwrap();
 
                                 let next_message = FromManager {
@@ -205,8 +204,6 @@ pub fn edits_consumer_runner(mut edits_consumer: Consumer, workflows: Arc<RwLock
                 info!("Received edit: {}", message);
 
                 let anti_workflow = create_anti_workflow(&message.workflow);
-                // if message.name field is present in the hashmap, update the hashmap
-                // else insert the message.name field in the hashmap
 
                 workflows
                     .write()
@@ -230,13 +227,13 @@ pub fn edits_consumer_runner(mut edits_consumer: Consumer, workflows: Arc<RwLock
 }
 
 fn create_anti_workflow(original: &Workflow) -> Workflow {
-    let mut reversed_connections = HashMap::new();
+    let mut reversed_connections: HashMap<Process, Vec<Process>> = HashMap::new();
 
     for (src, targets) in original.iter() {
         for target in targets {
             reversed_connections
                 .entry(target.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(src.clone());
         }
     }
