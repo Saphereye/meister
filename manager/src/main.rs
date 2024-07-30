@@ -56,6 +56,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         thread::park();
     }
-
-    // Bye Bye 🤫🧏
 }
