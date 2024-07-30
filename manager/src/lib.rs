@@ -1,3 +1,4 @@
+use core::str;
 use kafka::consumer::Consumer;
 use kafka::producer::{Producer, Record};
 use serde::Deserialize;
@@ -36,10 +37,25 @@ pub fn normal_consumer_runner(
     loop {
         for ms in normal_consumer.poll().unwrap().iter() {
             for m in ms.messages() {
-                let message: ToManager = match ron::de::from_bytes(m.value) {
+                let mut value = str::from_utf8(m.value).unwrap();
+                value = if value.starts_with('\"') {
+                    &value[1..]
+                } else {
+                    value
+                };
+
+                value = if value.ends_with('\"') {
+                    &value[..value.len() - 1]
+                } else {
+                    value
+                };
+
+                let value = value.replace("\\", "");
+
+                let message: ToManager = match ron::de::from_str(&value) {
                     Ok(value) => value,
                     Err(e) => {
-                        error!("Error: {}", e);
+                        error!("Normal consumer error: {}", e);
                         continue;
                     }
                 };

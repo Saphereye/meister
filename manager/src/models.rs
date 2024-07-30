@@ -28,8 +28,8 @@ impl Display for ToManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ToManager {{ uuid: {}..., name: {} ({}), Process: {}, status: {:?}, data: ... }}",
-            self.uuid[..8].to_owned(),
+            "ToManager {{ uuid: {}, name: {} ({}), Process: {}, status: {:?}, data: ... }}",
+            self.uuid.to_owned(),
             self.name,
             self.version.clone().unwrap_or("latest".to_string()),
             self.process,
@@ -56,7 +56,7 @@ impl Display for FromManager {
         write!(
             f,
             "FromManager {{ uuid: {}..., name: {} ({}), Process: {}, data: ... }}",
-            self.uuid[..8].to_owned(),
+            self.uuid.to_owned(),
             self.name,
             self.version,
             self.process
