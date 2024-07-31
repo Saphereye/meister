@@ -6,6 +6,7 @@ Meister is a suite designed for Workflow management, it has
 # Future Plans
 - Check out how [Node-RED](https://nodered.org/) does exports their graph
 - Check out how kafka consumer and partitions work
+- Look into [n8n](https://n8n.io/).
 
 | Feature | Description                  |
 |---------|------------------------------|
