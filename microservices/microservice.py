@@ -2,18 +2,16 @@ from kafka import KafkaProducer, KafkaConsumer
 from pprint import pprint
 import re
 import sys
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 import threading
 import json
 from random import randint
-import socket
 
 MICROSERVICE_NAME = sys.argv[1]
 app = Flask(MICROSERVICE_NAME)
 
-
 producer = KafkaProducer(bootstrap_servers='localhost:9092', api_version=(0, 10), value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-consumer = KafkaConsumer('frommanager', bootstrap_servers='localhost:9092', api_version=(0, 10))
+consumer = KafkaConsumer('frommanager', bootstrap_servers='localhost:9092', api_version=(0, 10), value_deserializer=lambda m: m.decode('utf-8'))
 
 def send_message(function: str, id: int | None = None):
     producer.send('tomanager', f'(uuid: "{randint(0, 9999999) if id is None else id}",name: "user_registration",version: Some("v0.1.0"),process: Process(service: "{MICROSERVICE_NAME}",function: "{function}"),status: Success,schema: "v0.1.0",data: "adarsh")')
@@ -38,7 +36,7 @@ def delete():
 def run_kafka_consumer():
     for msg in consumer:
         p = re.compile(r'(\w+):\"(\w+)\"')
-        data = dict(p.findall(msg.value.decode('utf-8')))
+        data = dict(p.findall(msg.value))
         print(f'{MICROSERVICE_NAME}: {data}')
 
         if data.get('service') != MICROSERVICE_NAME:
@@ -61,7 +59,8 @@ def run_kafka_consumer():
 
 # Function to run Flask app
 def run_flask_app():
-    app.run(host='0.0.0.0', port=int(sys.argv[2]))
+    port = 0 if (len(sys.argv) < 2) else int(sys.argv[2])
+    app.run(host='0.0.0.0', port=port)
 
 # Create threads for Kafka consumer and Flask app
 kafka_thread = threading.Thread(target=run_kafka_consumer)
